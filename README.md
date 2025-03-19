@@ -1,20 +1,18 @@
-**# Logistics Shipment Tracking
+# Logistics Shipment Tracking
 
 ---
 
-
-### 1. Activate the Virtual Environment
+Activate the Virtual Environment
 ```bash
 source venv/bin/activate
 ```
 
-### 2. Start FastAPI Server
+Start FastAPI Server
 ```bash
 uvicorn logistics_tracking.app.main:app --reload
 ```
 
-### 3. Open Frontend
-Access the frontend via your browser:
+Open Frontend
 ```
 http://127.0.0.1:8000/static/index.html
 ```
