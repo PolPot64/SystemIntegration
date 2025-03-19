@@ -1,60 +1,56 @@
-import pika
-import json
-import asyncio
-from fastapi import WebSocket
-from fastapi.websockets import WebSocketDisconnect
+from sqlalchemy.orm import Session
+from .models import Shipment
+from .models import ShipmentEvent
+from .rabbitmq import send_update
 
-RABBITMQ_HOST = "localhost"
+# Create a new shipment
+def create_shipment(db: Session, tracking_number: str, location: str):
+    new_shipment = Shipment(tracking_number=tracking_number, location=location)
+    db.add(new_shipment)
+    db.commit()
+    db.refresh(new_shipment)
+    return new_shipment
 
-# WebSocket manager for real-time updates
-class WebSocketManager:
-    def __init__(self):
-        self.active_connections = []
+# Retrieve a shipment by tracking number
+def get_shipment(db: Session, tracking_number: str):
+    return db.query(Shipment).filter(Shipment.tracking_number == tracking_number).first()
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+# Retrieve all shipments
+def get_shipments(db: Session):
+    return db.query(Shipment).all()
 
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+# Retrieve all shipments events
+def get_shipment_events(db: Session):
+    return db.query(ShipmentEvent).order_by(ShipmentEvent.timestamp.desc()).all()
 
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            try:
-                await connection.send_text(message)
-            except WebSocketDisconnect:
-                self.disconnect(connection)
+# Update shipment status and location
+def update_shipment(db: Session, tracking_number: str, status: str, location: str):
+    shipment = db.query(Shipment).filter(Shipment.tracking_number == tracking_number).first()
+    if shipment:
+        # **Ensure this part exists:**
+        shipment_event = ShipmentEvent(
+            tracking_number=tracking_number,
+            status=status,
+            location=location
+        )
+        db.add(shipment_event)  # Add event to the database
 
-ws_manager = WebSocketManager()
+        # Update latest shipment details
+        shipment.status = status
+        shipment.location = location
+        db.commit()
+        db.refresh(shipment)
 
-async def process_shipment_update(body):
-    """Process shipment update messages."""
-    shipment_data = json.loads(body)
+        # Send update to RabbitMQ
+        shipment_data = {"tracking_number": tracking_number, "status": status, "location": location}
+        send_update(shipment_data)
 
-    # Debugging Log
-    print(f"📡 Broadcasting Update: {shipment_data}")
+    return shipment
 
-    # Ensure required fields exist
-    if "tracking_number" not in shipment_data:
-        print("❌ ERROR: Missing 'tracking_number' in shipment update!")
-        return
-
-    # Send the update once
-    await ws_manager.broadcast(json.dumps(shipment_data))
-
-def consume_updates():
-    """Consume shipment updates from RabbitMQ."""
-    connection = pika.BlockingConnection(pika.ConnectionParameters(host=RABBITMQ_HOST))
-    channel = connection.channel()
-    channel.queue_declare(queue="shipment_updates")
-
-    def callback(ch, method, properties, body):
-        asyncio.create_task(process_shipment_update(body))  # Non-blocking
-
-    channel.basic_consume(queue="shipment_updates", on_message_callback=callback, auto_ack=True)
-
-    print(" [*] Waiting for shipment updates. To exit, press CTRL+C")
-    channel.start_consuming()
-
-if __name__ == "__main__":
-    consume_updates()
+# Delete a shipment
+def delete_shipment(db: Session, tracking_number: str):
+    shipment = db.query(Shipment).filter(Shipment.tracking_number == tracking_number).first()
+    if shipment:
+        db.delete(shipment)
+        db.commit()
+    return shipment
