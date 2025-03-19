@@ -9,7 +9,7 @@ source venv/bin/activate
 
 Start FastAPI Server
 ```bash
-uvicorn logistics_tracking.app.main:app --reload
+uvicorn logistics_tracking-main.app.main:app --reload
 ```
 
 Open Frontend
