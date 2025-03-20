@@ -1,12 +1,15 @@
+/* General Page Styles */
 body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
     text-align: center;
     padding: 20px;
+    margin: 0;
 }
 
+/* Container Styles */
 .container {
-    max-width: 600px;
+    max-width: 800px;
     margin: auto;
     background: white;
     padding: 20px;
@@ -14,50 +17,54 @@ body {
     border-radius: 8px;
 }
 
-input {
-    width: 80%;
-    padding: 10px;
-    margin-bottom: 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+/* Title */
+h2 {
+    color: #333;
 }
 
-button {
-    padding: 10px 15px;
-    background: #28a745;
-    color: white;
-    border: none;
-    cursor: pointer;
-    border-radius: 4px;
-}
-
-button:hover {
-    background: #218838;
-}
-
+/* Table Styles */
 table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
 }
 
-th, td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: center;
-}
-
+/* Table Headers */
 th {
     background-color: #28a745;
     color: white;
+    padding: 12px;
+    text-transform: uppercase;
 }
 
+/* Table Rows */
+td, th {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: center;
+}
+
+/* Alternating Row Colors */
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Status Formatting */
 .status {
     font-weight: bold;
-    color: blue;
 }
 
-.update {
-    color: green;
-    font-size: 14px;
+/* Success and Warning Colors */
+.status.delivered { color: green; }
+.status.pending { color: orange; }
+.status.in_transit { color: blue; }
+.status.shipped { color: purple; }
+
+/* Hover Effect */
+tr:hover {
+    background-color: #f1f1f1;
+    cursor: pointer;
 }
