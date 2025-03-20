@@ -1,62 +1,46 @@
+import pika
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..crud import create_shipment, get_shipment, get_shipments, update_shipment, delete_shipment
+from ..crud import get_shipment, update_shipment
 from ..models import ShipmentUpdate
 from ..models import ShipmentEvent
-from ..models import ShipmentLog
 
 router = APIRouter(prefix="/shipments", tags=["Shipments"])
 
-# Create a new shipment
-@router.post("/")
-def add_shipment(tracking_number: str, location: str, db: Session = Depends(get_db)):
-    return create_shipment(db, tracking_number, location)
+def publish_update(message):
+    """Send shipment update to RabbitMQ."""
+    connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+    channel = connection.channel()
+    channel.queue_declare(queue="shipment_updates")
+    channel.basic_publish(exchange="", routing_key="shipment_updates", body=json.dumps(message))
+    connection.close()
 
-# Get all shipments
-@router.get("/")
-def list_shipments(db: Session = Depends(get_db)):
-    return get_shipments(db)
-
-# Get a shipment by tracking number
-@router.get("/{tracking_number}")
-def get_shipment_by_tracking(tracking_number: str, db: Session = Depends(get_db)):
-    shipment = get_shipment(db, tracking_number)
-    if not shipment:
-        raise HTTPException(status_code=404, detail="Shipment not found")
-    return shipment
-
-# Get a shipment's history
-@router.get("/{tracking_number}/history")
-def get_shipment_history(tracking_number: str, db: Session = Depends(get_db)):
-    history = db.query(ShipmentEvent).filter(ShipmentEvent.tracking_number == tracking_number).all()
-    if not history:
-        raise HTTPException(status_code=404, detail="No history found for this shipment")
-    return history
-
-# Get a shipment's logs
-@router.get("/{tracking_number}/logs")
-def get_shipment_logs(tracking_number: str, db: Session = Depends(get_db)):
-    logs = db.query(ShipmentLog).filter(ShipmentLog.tracking_number == tracking_number).all()
-    if not logs:
-        raise HTTPException(status_code=404, detail="No logs found for this shipment")
-    return logs
-
-# Update a shipment
 @router.put("/{tracking_number}")
 def update_shipment_info(
         tracking_number: str,
-        shipment_data: ShipmentUpdate,  # Accept JSON body
+        shipment_data: ShipmentUpdate,
         db: Session = Depends(get_db)
 ):
-    if not get_shipment(db, tracking_number):
-        raise HTTPException(status_code=404, detail="Tracking number not found")
-    return update_shipment(db, tracking_number, shipment_data.status, shipment_data.location)
-
-# Delete a shipment
-@router.delete("/{tracking_number}")
-def remove_shipment(tracking_number: str, db: Session = Depends(get_db)):
-    shipment = delete_shipment(db, tracking_number)
+    shipment = get_shipment(db, tracking_number)
     if not shipment:
-        raise HTTPException(status_code=404, detail="Shipment not found")
-    return {"message": "Shipment deleted"}
+        raise HTTPException(status_code=404, detail="Tracking number not found")
+
+    updated_shipment = update_shipment(db, tracking_number, shipment_data.status, shipment_data.location)
+
+    # **Send update to RabbitMQ**
+    message = {
+        "tracking_number": tracking_number,
+        "status": shipment_data.status,
+        "location": shipment_data.location,
+        "timestamp": str(updated_shipment.timestamp),
+    }
+    publish_update(message)
+
+    return updated_shipment
+
+@router.get("/events")
+def get_all_shipment_events(db: Session = Depends(get_db)):
+    events = db.query(ShipmentEvent).all()
+    return events
